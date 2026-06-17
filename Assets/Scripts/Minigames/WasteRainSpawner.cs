@@ -65,6 +65,7 @@ public class WasteRainSpawner : MonoBehaviour
 
         GameObject obj = Instantiate(selected.prefab, spawnArea.parent);
         RectTransform rt = obj.GetComponent<RectTransform>();
+        obj.transform.SetSiblingIndex(spawnArea.GetSiblingIndex() + 1);
         if (rt == null) return;
 
         // Forzar configuración UI consistente

@@ -1,4 +1,3 @@
-using System.Collections;
 using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -16,11 +15,10 @@ public class SortingGameManager : MonoBehaviour
     public TMP_Text scoreText;
     public TMP_Text timeText;
     public TMP_Text livesText;
-    public TMP_Text comboText;
-    public TMP_Text feedbackText;
     public GameObject endPanel;
     public TMP_Text resultText;
     public ModalAnimator modalAnimator;
+    public FeedbackAnimator feedbackAnimator;
 
     [Header("Gameplay")]
     public float gameTime = 45f;
@@ -51,9 +49,6 @@ public class SortingGameManager : MonoBehaviour
         if (endPanel != null)
             endPanel.SetActive(false);
 
-        if (feedbackText != null)
-            feedbackText.gameObject.SetActive(false);
-
         UpdateUI();
     }
 
@@ -62,10 +57,12 @@ public class SortingGameManager : MonoBehaviour
         if (gameEnded) return;
 
         currentTime -= Time.deltaTime;
+
         if (currentTime <= 0f)
         {
             currentTime = 0f;
             EndGame(false);
+            return;
         }
 
         UpdateUI();
@@ -82,16 +79,19 @@ public class SortingGameManager : MonoBehaviour
         if (gameEnded) return;
 
         comboStreak++;
+
         int gained = pointsPerCorrect + ((comboStreak - 1) * comboBonus);
         score += gained;
         remainingWaste--;
 
-        Debug.Log("Correcto. Restantes: " + remainingWaste);
-
         if (AudioManager.Instance != null)
             AudioManager.Instance.PlayMatch();
 
-        ShowFeedback("¡Correcto! +" + gained, new Color(0.3f, 1f, 0.3f));
+        if (feedbackAnimator != null)
+        {
+            feedbackAnimator.ShowFeedback(GetPositiveMessage() + " +" + gained, new Color(0.3f, 1f, 0.3f), 0.8f);
+            feedbackAnimator.ShowCombo(comboStreak);
+        }
 
         UpdateUI();
 
@@ -107,12 +107,14 @@ public class SortingGameManager : MonoBehaviour
         score = Mathf.Max(0, score - penaltyPerWrong);
         lives--;
 
-        Debug.Log("Incorrecto. Vidas restantes: " + lives);
-
         if (AudioManager.Instance != null)
             AudioManager.Instance.PlayFail();
 
-        ShowFeedback("Incorrecto", new Color(1f, 0.35f, 0.35f));
+        if (feedbackAnimator != null)
+        {
+            feedbackAnimator.ShowFeedback(GetNegativeMessage(), new Color(1f, 0.35f, 0.35f), 0.9f);
+            feedbackAnimator.ShowCombo(0);
+        }
 
         UpdateUI();
 
@@ -133,9 +135,6 @@ public class SortingGameManager : MonoBehaviour
 
         if (livesText != null)
             livesText.text = "Vidas: " + lives;
-
-        if (comboText != null)
-            comboText.text = comboStreak > 1 ? "Combo x" + comboStreak : "";
     }
 
     private void EndGame(bool won)
@@ -150,8 +149,8 @@ public class SortingGameManager : MonoBehaviour
         if (resultText != null)
         {
             resultText.text = won
-                ? "¡Zona limpia!\nPuntaje: " + score
-                : "Fin del juego\nPuntaje: " + score;
+                ? GetFinalFeedback() + "\n\nPuntaje: " + score
+                : "Fin del juego\n\n" + GetFinalFeedback() + "\n\nPuntaje: " + score;
         }
 
         if (AudioManager.Instance != null && won)
@@ -163,45 +162,53 @@ public class SortingGameManager : MonoBehaviour
 
     public void RestartGame()
     {
+        Time.timeScale = 1f;
         SceneManager.LoadScene(SceneManager.GetActiveScene().name);
     }
 
     public void GoToMenu()
     {
+        Time.timeScale = 1f;
         SceneManager.LoadScene("MainMenu");
     }
 
-    private void ShowFeedback(string message, Color color)
+    private string GetPositiveMessage()
     {
-        if (feedbackText == null) return;
+        string[] messages =
+        {
+            "¡Correcto!",
+            "¡Excelente!",
+            "¡Muy bien!",
+            "¡Buen reciclaje!"
+        };
 
-        StopAllCoroutines();
-        StartCoroutine(FeedbackRoutine(message, color));
+        return messages[Random.Range(0, messages.Length)];
     }
 
-    private IEnumerator FeedbackRoutine(string message, Color color)
+    private string GetNegativeMessage()
     {
-        feedbackText.gameObject.SetActive(true);
-        feedbackText.text = message;
-        feedbackText.color = color;
-        feedbackText.transform.localScale = Vector3.one * 0.8f;
-
-        float time = 0f;
-        const float duration = 0.2f;
-
-        while (time < duration)
+        string[] messages =
         {
-            float t = time / duration;
-            float scale = Mathf.Lerp(0.8f, 1f, t);
-            feedbackText.transform.localScale = Vector3.one * scale;
-            time += Time.deltaTime;
-            yield return null;
-        }
+            "Residuo incorrecto",
+            "Intenta otra vez",
+            "Ese no corresponde",
+            "Cuidado con la clasificación"
+        };
 
-        feedbackText.transform.localScale = Vector3.one;
+        return messages[Random.Range(0, messages.Length)];
+    }
 
-        yield return new WaitForSeconds(0.5f);
+    private string GetFinalFeedback()
+    {
+        if (score >= 800)
+            return "Excelente desempeño. Clasificaste los residuos con gran precisión.";
 
-        feedbackText.gameObject.SetActive(false);
+        if (score >= 500)
+            return "Buen trabajo. Tu desempeño fue sólido.";
+
+        if (score >= 200)
+            return "Puedes mejorar. Revisa mejor el tipo de residuo antes de soltarlo.";
+
+        return "Necesitas practicar más. Observa las instrucciones y vuelve a intentarlo.";
     }
 }

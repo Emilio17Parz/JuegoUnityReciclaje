@@ -1,4 +1,3 @@
-using System.Collections;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
@@ -27,11 +26,10 @@ public class CatcherGameManager : MonoBehaviour
     public TMP_Text timeText;
     public TMP_Text livesText;
     public TMP_Text roundText;
-    public TMP_Text feedbackText;
-    public TMP_Text comboText;
     public GameObject endPanel;
     public TMP_Text resultText;
     public ModalAnimator modalAnimator;
+    public FeedbackAnimator feedbackAnimator;
 
     [Header("Player Bin")]
     public Image playerBinImage;
@@ -72,9 +70,6 @@ public class CatcherGameManager : MonoBehaviour
         if (endPanel != null)
             endPanel.SetActive(false);
 
-        if (feedbackText != null)
-            feedbackText.gameObject.SetActive(false);
-
         ApplyCurrentRound();
         UpdateUI();
     }
@@ -111,13 +106,18 @@ public class CatcherGameManager : MonoBehaviour
         if (caughtType == CurrentTargetType)
         {
             comboStreak++;
+
             int gained = pointsPerCorrect + ((comboStreak - 1) * comboBonus);
             score += gained;
 
             if (AudioManager.Instance != null)
                 AudioManager.Instance.PlayMatch();
 
-            ShowFeedback("¡Correcto! +" + gained, new Color(0.3f, 1f, 0.3f), 0.9f);
+            if (feedbackAnimator != null)
+            {
+                feedbackAnimator.ShowFeedback(GetPositiveMessage() + " +" + gained, new Color(0.3f, 1f, 0.3f), 0.8f);
+                feedbackAnimator.ShowCombo(comboStreak);
+            }
         }
         else
         {
@@ -128,7 +128,11 @@ public class CatcherGameManager : MonoBehaviour
             if (AudioManager.Instance != null)
                 AudioManager.Instance.PlayFail();
 
-            ShowFeedback("Incorrecto", new Color(1f, 0.35f, 0.35f), 1.0f);
+            if (feedbackAnimator != null)
+            {
+                feedbackAnimator.ShowFeedback(GetNegativeMessage(), new Color(1f, 0.35f, 0.35f), 0.9f);
+                feedbackAnimator.ShowCombo(0);
+            }
 
             if (lives <= 0)
             {
@@ -146,6 +150,7 @@ public class CatcherGameManager : MonoBehaviour
         if (rounds == null || rounds.Count == 0) return;
 
         currentRoundIndex++;
+
         if (currentRoundIndex >= rounds.Count)
         {
             EndGame(true);
@@ -167,7 +172,11 @@ public class CatcherGameManager : MonoBehaviour
         if (playerBinImage != null && round.binSprite != null)
             playerBinImage.sprite = round.binSprite;
 
-        ShowFeedback("Ronda: " + round.roundLabel, new Color(1f, 0.9f, 0.2f), 1.8f);
+        if (feedbackAnimator != null)
+        {
+            feedbackAnimator.ShowFeedback("Ronda: " + round.roundLabel, new Color(1f, 0.9f, 0.2f), 1.8f);
+            feedbackAnimator.ShowCombo(0);
+        }
     }
 
     private void UpdateUI()
@@ -180,14 +189,6 @@ public class CatcherGameManager : MonoBehaviour
 
         if (livesText != null)
             livesText.text = "Vidas: " + lives;
-
-        if (comboText != null)
-        {
-            if (comboStreak > 1)
-                comboText.text = "Combo x" + comboStreak;
-            else
-                comboText.text = "";
-        }
     }
 
     private void EndGame(bool won)
@@ -198,9 +199,11 @@ public class CatcherGameManager : MonoBehaviour
             endPanel.SetActive(true);
 
         if (resultText != null)
+        {
             resultText.text = won
-                ? "¡Ganaste!\nPuntaje: " + score
-                : "Fin del juego\nPuntaje: " + score;
+                ? GetFinalFeedback() + "\n\nPuntaje: " + score
+                : "Fin del juego\n\n" + GetFinalFeedback() + "\n\nPuntaje: " + score;
+        }
 
         if (AudioManager.Instance != null && won)
             AudioManager.Instance.PlayWin();
@@ -211,30 +214,53 @@ public class CatcherGameManager : MonoBehaviour
 
     public void RestartGame()
     {
+        Time.timeScale = 1f;
         SceneManager.LoadScene(SceneManager.GetActiveScene().name);
     }
 
     public void GoToMenu()
     {
+        Time.timeScale = 1f;
         SceneManager.LoadScene("MainMenu");
     }
 
-    private void ShowFeedback(string message, Color color, float duration)
+    private string GetPositiveMessage()
     {
-        if (feedbackText == null) return;
+        string[] messages =
+        {
+            "¡Correcto!",
+            "¡Excelente!",
+            "¡Muy bien!",
+            "¡Buen reciclaje!"
+        };
 
-        StopAllCoroutines();
-        StartCoroutine(FeedbackRoutine(message, color, duration));
+        return messages[Random.Range(0, messages.Length)];
     }
 
-    private IEnumerator FeedbackRoutine(string message, Color color, float duration)
+    private string GetNegativeMessage()
     {
-        feedbackText.gameObject.SetActive(true);
-        feedbackText.text = message;
-        feedbackText.color = color;
+        string[] messages =
+        {
+            "Residuo incorrecto",
+            "Intenta otra vez",
+            "Ese no corresponde",
+            "Cuidado con la clasificación"
+        };
 
-        yield return new WaitForSeconds(duration);
+        return messages[Random.Range(0, messages.Length)];
+    }
 
-        feedbackText.gameObject.SetActive(false);
+    private string GetFinalFeedback()
+    {
+        if (score >= 800)
+            return "Excelente desempeño. Clasificaste los residuos con gran precisión.";
+
+        if (score >= 500)
+            return "Buen trabajo. Tu desempeño fue sólido.";
+
+        if (score >= 200)
+            return "Puedes mejorar. Revisa mejor el tipo de residuo antes de actuar.";
+
+        return "Necesitas practicar más. Observa las instrucciones y vuelve a intentarlo.";
     }
 }

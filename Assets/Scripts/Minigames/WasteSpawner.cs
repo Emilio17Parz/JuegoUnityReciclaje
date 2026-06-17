@@ -18,6 +18,13 @@ public class WasteSpawner : MonoBehaviour
     public int maxSpawn = 8;
     public RectTransform playArea;
 
+    [Header("Distribution")]
+    public float paddingX = 120f;
+    public float paddingTop = 120f;
+    public float paddingBottom = 210f;
+    public float minDistanceBetweenWaste = 170f;
+    public int maxAttemptsPerWaste = 100;
+
     private SortingGameManager gameManager;
     private readonly List<Vector2> usedPositions = new();
 
@@ -40,6 +47,8 @@ public class WasteSpawner : MonoBehaviour
             Debug.LogError("WasteSpawner: no hay prefabs asignados.");
             return;
         }
+
+        usedPositions.Clear();
 
         int amount = Random.Range(minSpawn, maxSpawn + 1);
         int spawnedCount = 0;
@@ -69,6 +78,10 @@ public class WasteSpawner : MonoBehaviour
                 continue;
             }
 
+            rt.anchorMin = new Vector2(0.5f, 0.5f);
+            rt.anchorMax = new Vector2(0.5f, 0.5f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+
             rt.anchoredPosition = GetRandomPosition();
             rt.localRotation = Quaternion.Euler(0f, 0f, Random.Range(-12f, 12f));
             rt.localScale = Vector3.one;
@@ -87,39 +100,59 @@ public class WasteSpawner : MonoBehaviour
 
     private Vector2 GetRandomPosition()
     {
-        float padding = 80f;
+        float minX = -playArea.rect.width * 0.5f + paddingX;
+        float maxX = playArea.rect.width * 0.5f - paddingX;
 
-        for (int i = 0; i < 60; i++)
+        float minY = -playArea.rect.height * 0.5f + paddingBottom;
+        float maxY = playArea.rect.height * 0.5f - paddingTop;
+
+        for (int i = 0; i < maxAttemptsPerWaste; i++)
         {
-            float x = Random.Range(
-                -playArea.rect.width * 0.5f + padding,
-                playArea.rect.width * 0.5f - padding
+            Vector2 candidate = new Vector2(
+                Random.Range(minX, maxX),
+                Random.Range(minY, maxY)
             );
 
-            float y = Random.Range(
-                -playArea.rect.height * 0.5f + padding,
-                playArea.rect.height * 0.5f - padding
-            );
-
-            Vector2 candidate = new(x, y);
-
-            bool overlaps = false;
-            foreach (Vector2 used in usedPositions)
-            {
-                if (Vector2.Distance(candidate, used) < 130f)
-                {
-                    overlaps = true;
-                    break;
-                }
-            }
-
-            if (!overlaps)
+            if (IsFarEnough(candidate))
             {
                 usedPositions.Add(candidate);
                 return candidate;
             }
         }
 
-        return Vector2.zero;
+        return GetFallbackPosition(minX, maxX, minY, maxY);
+    }
+
+    private bool IsFarEnough(Vector2 candidate)
+    {
+        foreach (Vector2 used in usedPositions)
+        {
+            if (Vector2.Distance(candidate, used) < minDistanceBetweenWaste)
+                return false;
+        }
+
+        return true;
+    }
+
+    private Vector2 GetFallbackPosition(float minX, float maxX, float minY, float maxY)
+    {
+        int index = usedPositions.Count;
+
+        int columns = 4;
+        float spacingX = (maxX - minX) / Mathf.Max(1, columns - 1);
+        float spacingY = minDistanceBetweenWaste;
+
+        int col = index % columns;
+        int row = index / columns;
+
+        float x = minX + col * spacingX;
+        float y = maxY - row * spacingY;
+
+        y = Mathf.Clamp(y, minY, maxY);
+
+        Vector2 fallback = new Vector2(x, y);
+        usedPositions.Add(fallback);
+
+        return fallback;
     }
 }
